@@ -1,0 +1,21 @@
+service: test
+frameworkVersion: "3"
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    host: 0.0.0.0
+
+provider:
+  name: aws
+  runtime: python3.9
+
+functions:
+  hello:
+    handler: lambdas/add_transaction.handler
+    events:
+      - httpApi:
+          path: /clientes/{id}/transacoes
+          method: post
