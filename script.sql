@@ -1,8 +1,7 @@
 CREATE UNLOGGED TABLE clients (
     id SERIAL PRIMARY KEY,
     transfer_limit INTEGER NOT NULL,
-    balance INTEGER NOT NULL,
-    transactions jsonb NOT NULL DEFAULT '[]'
+    balance INTEGER NOT NULL
 );
 
 CREATE UNLOGGED TABLE transactions (
