@@ -13,9 +13,16 @@ provider:
   runtime: python3.9
 
 functions:
-  hello:
+  add_transaction:
     handler: lambdas/add_transaction.handler
     events:
       - httpApi:
           path: /clientes/{id}/transacoes
           method: post
+
+  get_extract:
+    handler: lambdas/extract.handler
+    events:
+      - httpApi:
+          path: /clientes/{id}/extrato
+          method: get
