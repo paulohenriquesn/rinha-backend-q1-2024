@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
-from psycopg_pool import ConnectionPool
 import datetime
+from psycopg_pool import ConnectionPool
 
 pool = ConnectionPool(
     f"host={'db'} port={'5432'} dbname={'dev'} user={'dev'} password={'dev'}",
@@ -63,6 +63,7 @@ class handler(BaseHTTPRequestHandler):
                 "ultimas_transacoes": ultimas_transacoes
             }
             self.wfile.write(json.dumps(response).encode('utf-8'))
+            return
 
     def do_POST(self):
         path_parts = self.path.split('/')
