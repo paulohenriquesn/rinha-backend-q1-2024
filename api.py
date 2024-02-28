@@ -10,7 +10,7 @@ url = URL.create(
     drivername='postgresql',
     username='dev',
     password='dev',
-    host='localhost',
+    host='db',
     database='dev'
 )
 
