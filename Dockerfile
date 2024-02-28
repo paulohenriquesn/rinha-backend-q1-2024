@@ -1,11 +1,9 @@
-FROM nikolaik/python-nodejs:latest	
+FROM python:3.10-slim-buster
 
 WORKDIR /usr/src/app
 
 COPY . ./
 
-RUN npm install
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-RUN pip install -r requirements.txt
-
-CMD ["npm", "run", "dev"]
+CMD ["python", "./api.py"]
