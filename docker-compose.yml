@@ -1,9 +1,10 @@
 version: "3.5"
 
 services:
-  api01: &api
+  api01:
     # Lembre-se de que seu serviço HTTP deve estar hospedado num repositório
     # publicamente acessível! Ex.: hub.docker.com
+    &api
     build: .
     #image: paulohenriquesn/rinha-lambda:latest
     hostname: api01
@@ -17,11 +18,11 @@ services:
       - "8082:3000"
     depends_on:
       - db
-    #deploy:
-     # resources:
-      #  limits:
-       #   cpus: "0.6"
-        #  memory: "200MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: "200MB"
 
   api02:
     # Essa sintaxe reusa o que foi declarado em 'api01'.
@@ -42,11 +43,11 @@ services:
     ports:
       # Obrigatório expor/usar a porta 9999 no load balancer!
       - "9999:9999"
-    #deploy:
-     # resources:
-      #  limits:
-       #   cpus: "0.17"
-        #  memory: "10MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.17"
+          memory: "10MB"
 
   db:
     image: postgres:latest
@@ -60,15 +61,15 @@ services:
     volumes:
       - ./script.sql:/docker-entrypoint-initdb.d/script.sql
       - ./postgresql.conf:/etc/postgresql/postgresql.conf
-    #deploy:
-     # resources:
-      #  limits:
+    deploy:
+      resources:
+        limits:
           # Note que a soma de todos os limites dos serviços
           # aqui declarados é de 1.5 unidades de CPU e 550MB
           # de memória. A distribuição feita aqui é apenas
           # um exemplo – distribua como quiser.
-          #cpus: "0.13"
-          #memory: "140MB"
+          cpus: "0.13"
+          memory: "140MB"
 
 # O uso do modo `bridge` deve ser adequado à carga que será usada no teste.
 # A edição anterior se beneficiou do modo host pois o volume de requisições
