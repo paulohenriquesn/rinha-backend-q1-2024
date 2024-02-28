@@ -6,12 +6,6 @@ import datetime
 
 def handler(event, context):
     body = json.loads(event['body'])
-    # {
-    # "valor": 1000,
-    # "tipo" : "c",
-    # "descricao" : "descricao"
-    # }
-
     if (int(event['pathParameters']['id']) <= 0 or int(event['pathParameters']['id']) > 5):
         return {
             "statusCode": 404,
@@ -60,15 +54,11 @@ def handler(event, context):
                     "body": None}
 
         new_balance = 0
-        # const newBalance =
-        # tipo === "c" ? customer.saldo + valor : customer.saldo - valor;
 
         if (body['tipo'] == 'c'):
             new_balance = saldo_cliente + body['valor']
         else:
             new_balance = saldo_cliente - body['valor']
-
-        print(new_balance)
 
         if (len(transactions) == 10):
             transactions.pop()
@@ -79,8 +69,6 @@ def handler(event, context):
             'valor': body['valor'],
             'realizada_em': str(datetime.datetime.now()),
         })
-
-        print(transactions)
 
         conn.execute(text("UPDATE clients SET balance=:balance, transactions=:transactions WHERE id=:id"), {
                      'balance': new_balance, 'id': event['pathParameters']['id'], 'transactions': json.dumps(transactions)})

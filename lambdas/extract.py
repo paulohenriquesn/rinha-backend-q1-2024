@@ -5,11 +5,6 @@ import datetime
 
 
 def handler(event, context):
-    # {
-    # "valor": 1000,
-    # "tipo" : "c",
-    # "descricao" : "descricao"
-    # }
 
     if (int(event['pathParameters']['id']) <= 0 or int(event['pathParameters']['id']) > 5):
         return {
