@@ -1,20 +1,14 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
-from sqlalchemy import text
+from psycopg_pool import ConnectionPool
 import datetime
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
-
-url = URL.create(
-    drivername='postgresql',
-    username='dev',
-    password='dev',
-    host='db',
-    database='dev'
+pool = ConnectionPool(
+    f"host={'db'} port={'5432'} dbname={'dev'} user={'dev'} password={'dev'}",
+    min_size=14,
+    max_size=50,
 )
-
-engine = create_engine(url)
+pool.wait()
 
 
 class handler(BaseHTTPRequestHandler):
@@ -33,31 +27,42 @@ class handler(BaseHTTPRequestHandler):
             saldo_cliente = 0
             transactions = []
 
-            with engine.connect() as conn:
-                query = conn.execute(
-                    text("SELECT transfer_limit, balance, transactions FROM clients WHERE id = :id"), {
-                        'id': id}
-                )
+            with pool.connection() as conn:
+                result = conn.execute(
+                    f"SELECT transfer_limit, balance FROM clients WHERE id = {id}"
+                ).fetchone()
 
-                for row in query:
-                    limite_cliente = row[0]
-                    saldo_cliente = row[1]
-                    transactions = row[2]
+                print(result)
+
+                limite_cliente = result[0]
+                saldo_cliente = result[1]
+                ultimas_transacoes = []
+
+                transactions = conn.execute(
+                    f"SELECT valor, tipo, descricao, realizada_em FROM transactions WHERE client_id = {id} ORDER BY realizada_em DESC LIMIT 10"
+                ).fetchall()
+
+                for transaction in transactions:
+                    ultimas_transacoes.append({
+                        "valor": transaction[0],
+                        "tipo": transaction[1],
+                        "descricao": transaction[2],
+                        "realizada_em": transaction[3].isoformat().replace("+00:00", "Z"),
+                    })
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
+
             response = {
                 "saldo": {
                     "data_extrato": str(datetime.datetime.now()),
                     "total": saldo_cliente,
                     "limite": limite_cliente
                 },
-                "ultimas_transacoes": transactions
+                "ultimas_transacoes": ultimas_transacoes
             }
             self.wfile.write(json.dumps(response).encode('utf-8'))
-
-            return
 
     def do_POST(self):
         path_parts = self.path.split('/')
@@ -74,73 +79,76 @@ class handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
 
-        required_fields = ["valor", "tipo", "descricao"]
+            required_fields = ["valor", "tipo", "descricao"]
 
-        if parsed_body is None:
-            self.send_response(400)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            return
-
-        for field in required_fields:
-            if field not in parsed_body:
-                self.send_response(404)
+            if parsed_body is None:
+                self.send_response(422)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                break
+                return
 
-        limite_cliente = 0
-        saldo_cliente = 0
-        transactions = []
-
-        with engine.connect() as conn:
-            query = conn.execute(
-                text("SELECT transfer_limit, balance, transactions FROM clients WHERE id = :id"), {
-                    'id': id}
-            )
-
-            for row in query:
-                limite_cliente = row[0]
-                saldo_cliente = row[1]
-                transactions = row[2]
-
-            if parsed_body['tipo'] == 'd':
-                valor = parsed_body['valor']
-                if (saldo_cliente - valor < -limite_cliente):
+            for field in required_fields:
+                if field not in parsed_body:
                     self.send_response(422)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
+                    break
 
-            new_balance = 0
+            if parsed_body['valor'] <= 0 or not type(parsed_body['valor']) is int or not type(parsed_body['descricao']) is str or len(parsed_body['descricao']) <= 0 or len(parsed_body['descricao']) > 10 or parsed_body['tipo'] not in ["c", "d"]:
+                self.send_response(422)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                return
 
-            if (parsed_body['tipo'] == 'c'):
-                new_balance = saldo_cliente + parsed_body['valor']
-            else:
-                new_balance = saldo_cliente - parsed_body['valor']
+            limite_cliente = 0
+            saldo_cliente = 0
 
-            if (len(transactions) == 10):
-                transactions.pop()
+            with pool.connection() as conn:
+                conn.execute('BEGIN')
+                result = conn.execute(
+                    f"SELECT transfer_limit, balance FROM clients WHERE id = {id} FOR UPDATE"
+                ).fetchone()
 
-            transactions.insert(0, {
-                'descricao': parsed_body['descricao'],
-                'tipo': parsed_body['tipo'],
-                'valor': parsed_body['valor'],
-                'realizada_em': str(datetime.datetime.now()),
-            })
+                limite_cliente = result[0]
+                saldo_cliente = result[1]
 
-            conn.execute(text("UPDATE clients SET balance=:balance, transactions=:transactions WHERE id=:id"), {
-                'balance': new_balance, 'id': id, 'transactions': json.dumps(transactions)})
+                if parsed_body['tipo'] == 'd':
+                    valor = parsed_body['valor']
+                    if (saldo_cliente - valor < -limite_cliente):
+                        conn.execute('ROLLBACK')
+                        self.send_response(422)
+                        self.send_header(
+                            'Content-type', 'application/json')
+                        self.end_headers()
+                        return
 
-            conn.commit()
+                new_balance = 0
 
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {
-                "limite": limite_cliente,
-                "saldo": new_balance
-            }
-            self.wfile.write(json.dumps(response).encode('utf-8'))
+                if (parsed_body['tipo'] == 'c'):
+                    new_balance = saldo_cliente + parsed_body['valor']
+                else:
+                    new_balance = saldo_cliente - parsed_body['valor']
+
+                # 1 2 3
+
+                    # 12 3 4
+
+                conn.execute(
+                    "INSERT INTO transactions(client_id, valor, tipo, descricao, realizada_em) VALUES (%s, %s, %s, %s, %s)", (id, parsed_body['valor'], parsed_body['tipo'], parsed_body['descricao'], str(datetime.datetime.now())))
+
+                conn.execute("UPDATE clients SET balance=%s WHERE id=%s",
+                             (new_balance, id))
+
+                conn.execute('COMMIT')
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {
+                    "limite": limite_cliente,
+                    "saldo": new_balance
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
 
 
 if __name__ == '__main__':
